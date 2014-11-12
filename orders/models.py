@@ -1,5 +1,5 @@
 from django.db import models
-
+from operator import itemgetter
 
 class Order(models.Model):
     FCM = 'FCM'
@@ -17,8 +17,70 @@ class Order(models.Model):
         pri = list(Order.objects.filter(shipping_method='PRI').values_list('pk', flat=True))
         return [fcm, pri]
 
+    
+    @staticmethod
+    def split_by_single_and_multiple():
+        singles = []
+        multiples = []
+        orders = Order.objects.all()
+        
+        for order in orders:
+            if order.items.count() == 1:
+                singles.append(order.id)
+            else:
+                multiples.append(order.id)
+        
+        return [singles, multiples]
 
+    
+    @staticmethod
+    def single_orders_are_sorted():
+        unsorted_orders = []
+        orders = Order.objects.annotate(item_count=Count('items')).filter(item_count=1)
+        
+        #Get priority (key, value) dictionary
+        priority = orders[0].items.first().priority
+        
+        #loop through each "single order" and find its priority and order.id
+        for order in orders:
+            #since these are single orders, they can be found at items.first()
+            only_order = order.items.first()
+            
+            #store the priority at index 0. store the order.id at index 1
+            unsorted_orders.append([priority[only_order.product], only_order.order.id])
+       
+        #sort by using the priority number (stored at index 0) 
+        sorted_orders = sorted(unsorted_orders, key=itemgetter(0))
+        
+       
+        #create a new array with only the order_id
+        sorted_ids = []
+        for i in range (0, len(sorted_orders)):
+            sorted_ids.append(sorted_orders[i][1])
+         
+        return sorted_ids     
 
+    @staticmethod
+    def orders_split_by_xxl_and_not():
+        xxl = []
+        has_xxl = False
+        no_xxl = []
+        orders = Order.objects.all()
+
+        for order in orders:
+            has_xxl = False
+            if order.items.count() > 1:
+                for item in order.items.all():
+                    if item.product == 'XXL':
+                        xxl.append(order.id)
+                        has_xxl = True
+                        break
+                if has_xxl == False:
+                    no_xxl.append(order.id)
+
+        return [xxl, no_xxl] 
+
+     
 class OrderItem(models.Model):
     XS = 'XS'
     S = 'S'
